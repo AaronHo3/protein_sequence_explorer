@@ -8,6 +8,8 @@ This is the first in a series of protein bioinformatics projects. The goal is a 
 
 ## Video Demo
 
+https://github.com/user-attachments/assets/2b6b2c16-9c5d-4fd4-843b-0f98505b6adf
+
 
 ## Status
 
