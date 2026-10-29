@@ -21,7 +21,7 @@ https://github.com/user-attachments/assets/2b6b2c16-9c5d-4fd4-843b-0f98505b6adf
 | 4. Visualization | Done |
 | 5. Biopython validation report | Done |
 | 6. Interactive app (redesigned) | Done |
-| 7. Documentation and demo | Done ([demo script](docs/DEMO.md)) |
+| 7. Documentation and demo | Done |
 
 ## Installation and launch
 
