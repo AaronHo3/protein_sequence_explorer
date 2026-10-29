@@ -27,6 +27,25 @@ KYTE_DOOLITTLE: dict[str, float] = {
     "S": -0.8, "T": -0.7, "V": 4.2, "W": -0.9, "Y": -1.3,
 }
 
+# Average residue masses in Da (amino acid minus one water), derived from
+# Biopython's IUPACData.protein_weights. Includes U (Sec) and O (Pyl).
+RESIDUE_MASSES: dict[str, float] = {
+    "A": 71.0779, "C": 103.1429, "D": 115.0874, "E": 129.1140, "F": 147.1738,
+    "G": 57.0513, "H": 137.1393, "I": 113.1576, "K": 128.1723, "L": 113.1576,
+    "M": 131.1960, "N": 114.1026, "O": 237.2981, "P": 97.1152, "Q": 128.1292,
+    "R": 156.1857, "S": 87.0773, "T": 101.1039, "U": 150.0379, "V": 99.1310,
+    "W": 186.2099, "Y": 163.1732,
+}
+WATER_MASS = 18.01528  # average mass of H2O, added once for the chain termini
+
+# Side-chain and terminal pKa values from EMBOSS (iep). U (selenocysteine) is not in
+# EMBOSS; 5.2 is a literature estimate. Real pKa values shift with local environment.
+POSITIVE_PKA: dict[str, float] = {"Nterm": 8.6, "K": 10.8, "R": 12.5, "H": 6.5}
+NEGATIVE_PKA: dict[str, float] = {
+    "Cterm": 3.6, "D": 3.9, "E": 4.1, "C": 8.5, "Y": 10.1, "U": 5.2,
+}
+PI_TOLERANCE = 1e-4
+
 def _residues(sequence: str) -> str:
     """Uppercase sequence with a terminal stop removed. Raises ValueError if nothing remains."""
     residues = sequence.upper().removesuffix(STOP)
@@ -92,3 +111,53 @@ def gravy(sequence: str) -> float:
     if not values:
         raise ValueError("Cannot compute GRAVY: sequence has no standard residues.")
     return sum(values) / len(values)
+
+def molecular_weight(sequence: str) -> float:
+    """Average molecular weight in Da: sum of residue masses plus one water.
+
+    Assumes no post-translational modifications and reduced cysteines (each
+    disulfide bond would lower the mass by ~2.016 Da). Raises ValueError for
+    residues without a defined mass (B, Z, J, X).
+    """
+    residues = _residues(sequence)
+    unknown = sorted(set(residues) - RESIDUE_MASSES.keys())
+    if unknown:
+        raise ValueError(f"Cannot compute molecular weight: no mass for {', '.join(unknown)}.")
+    return sum(RESIDUE_MASSES[r] for r in residues) + WATER_MASS
+
+def _ionisable_group_counts(sequence: str) -> Counter[str]:
+    """Counts of each ionisable side chain, plus one N- and one C-terminus."""
+    counts = Counter(_residues(sequence))
+    counts["Nterm"] = 1
+    counts["Cterm"] = 1
+    return counts
+
+def net_charge(sequence: str, ph: float = 7.0) -> float:
+    """Estimated net charge at a given pH using the Henderson-Hasselbalch equation.
+
+    Treats every ionisable group as independent and fully solvent-exposed, so it
+    ignores structural pKa shifts and counts disulfide-bonded cysteines as ionisable.
+    """
+    counts = _ionisable_group_counts(sequence)
+    positive = sum(
+        counts[group] / (1 + 10 ** (ph - pka)) for group, pka in POSITIVE_PKA.items()
+    )
+    negative = sum(
+        counts[group] / (1 + 10 ** (pka - ph)) for group, pka in NEGATIVE_PKA.items()
+    )
+    return positive - negative
+
+def isoelectric_point(sequence: str) -> float:
+    """Estimated pI: the pH where net_charge is zero, found by bisection on [0, 14].
+
+    Net charge decreases monotonically with pH, so bisection always converges.
+    """
+    _residues(sequence)  # validate non-empty before searching
+    low, high = 0.0, 14.0
+    while high - low > PI_TOLERANCE:
+        mid = (low + high) / 2
+        if net_charge(sequence, mid) > 0:
+            low = mid
+        else:
+            high = mid
+    return (low + high) / 2
