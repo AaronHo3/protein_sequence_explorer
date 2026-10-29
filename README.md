@@ -181,7 +181,4 @@ Scientific code never imports plotting or Streamlit. Visualization functions tak
 - `annotations`: labelled ranges such as domains or mutations
 - `positions`: a column-to-residue mapping, so gapped alignment rows keep correct numbering
 
-## Testing
-
-`uv run pytest` runs 414 tests: parsing, validation, features, Biopython agreement, tables, exports, every figure builder, the viewer payload, the residue inspector, and every app page through Streamlit's `AppTest`. The browser interactions (click, shift-click, keyboard, drag on the hydropathy plot, scatter click, uploads, downloads, light and dark mode, 1024 px layout) were checked in a real browser with Playwright. They are not part of the automated suite.
 
