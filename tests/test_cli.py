@@ -37,3 +37,35 @@ def test_summarize_malformed_file_returns_error(capsys):
     err = capsys.readouterr().err
     assert "not valid FASTA" in err
     assert "Line 1" in err
+
+
+def test_analyze_writes_all_outputs(tmp_path, capsys):
+    output = tmp_path / "results"
+    assert main(["analyze", str(SAMPLE_FASTA), "--output", str(output)]) == 0
+    assert {p.name for p in output.iterdir()} == {
+        "features.csv", "composition.csv", "summary.csv", "run_info.json",
+    }
+    assert "Analyzed 8 records (8 valid, 0 invalid)" in capsys.readouterr().out
+
+
+def test_analyze_ph_option_names_charge_column(tmp_path):
+    output = tmp_path / "results"
+    assert main(["analyze", str(SAMPLE_FASTA), "--output", str(output), "--ph", "7.4"]) == 0
+    header = (output / "features.csv").read_text().splitlines()[0]
+    assert "net_charge_ph7.4" in header
+
+
+def test_analyze_keeps_invalid_records(tmp_path, capsys):
+    fasta = tmp_path / "mixed.fasta"
+    fasta.write_text(">good\nMKTAYI\n>gapped\nMK-TAYI\n")
+    output = tmp_path / "results"
+    assert main(["analyze", str(fasta), "--output", str(output)]) == 0
+    assert "(1 valid, 1 invalid)" in capsys.readouterr().out
+    assert len((output / "features.csv").read_text().splitlines()) == 3  # header + 2 rows
+
+
+def test_analyze_malformed_file_returns_error_and_writes_nothing(tmp_path, capsys):
+    output = tmp_path / "results"
+    assert main(["analyze", str(FIXTURES / "empty_record.fasta"), "--output", str(output)]) == 1
+    assert "not valid FASTA" in capsys.readouterr().err
+    assert not output.exists()

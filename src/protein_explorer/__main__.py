@@ -1,12 +1,23 @@
-# Command-line entry point: `python -m protein_explorer summarize <file.fasta>`.
+# Command-line entry point:
+#   python -m protein_explorer summarize <file.fasta>
+#   python -m protein_explorer analyze <file.fasta> --output results/
 
 import argparse
 import sys
+from pathlib import Path
 
+from protein_explorer.dataset import (
+    build_composition_table,
+    build_feature_table,
+    summarize_features,
+)
+from protein_explorer.export import build_run_info, write_results
 from protein_explorer.fasta import FastaFormatError, FastaRecord, read_fasta
 from protein_explorer.validation import ValidationResult, validate_sequence
 
 ID_WIDTH = 24
+DEFAULT_OUTPUT_DIR = "results"
+DEFAULT_PH = 7.0
 
 def format_summary(records: list[FastaRecord], results: list[ValidationResult]) -> str:
     """Build a plain-text table with one row per record, followed by totals."""
@@ -26,32 +37,69 @@ def format_summary(records: list[FastaRecord], results: list[ValidationResult]) 
     lines.append(f"Length range: {min(lengths)}-{max(lengths)} residues")
     return "\n".join(lines)
 
-def summarize(path: str) -> int:
-    """Parse and validate a FASTA file, print the summary, and return an exit code."""
+def _load_records(path: str) -> list[FastaRecord] | None:
+    """Read a FASTA file, printing a user-facing error and returning None on failure."""
     try:
-        records = read_fasta(path)
+        return read_fasta(path)
     except FileNotFoundError:
         print(f"Error: file not found: {path}", file=sys.stderr)
-        return 1
     except FastaFormatError as error:
         print(f"Error: {path} is not valid FASTA. {error}", file=sys.stderr)
-        return 1
+    return None
 
+def summarize(path: str) -> int:
+    """Parse and validate a FASTA file, print the summary, and return an exit code."""
+    records = _load_records(path)
+    if records is None:
+        return 1
     results = [validate_sequence(record.sequence) for record in records]
     print(format_summary(records, results))
+    return 0
+
+def analyze(path: str, output_dir: str, ph: float) -> int:
+    """Compute feature tables for a FASTA file and write them to output_dir."""
+    records = _load_records(path)
+    if records is None:
+        return 1
+    feature_table = build_feature_table(records, ph=ph)
+    composition_table = build_composition_table(records)
+    summary_table = summarize_features(feature_table)
+    run_info = build_run_info(Path(path), feature_table, ph)
+
+    written = write_results(
+        Path(output_dir), feature_table, composition_table, summary_table, run_info
+    )
+    n_valid = run_info["valid_records"]
+    print(f"Analyzed {len(records)} records ({n_valid} valid, {len(records) - n_valid} invalid).")
+    for file_path in written:
+        print(f"  wrote {file_path}")
     return 0
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="protein_explorer")
     subcommands = parser.add_subparsers(dest="command", required=True)
+
     summarize_parser = subcommands.add_parser(
         "summarize", help="Print a validation summary for a FASTA file."
     )
     summarize_parser.add_argument("fasta", help="Path to a protein FASTA file.")
 
+    analyze_parser = subcommands.add_parser(
+        "analyze", help="Compute features and write CSV tables."
+    )
+    analyze_parser.add_argument("fasta", help="Path to a protein FASTA file.")
+    analyze_parser.add_argument(
+        "--output", default=DEFAULT_OUTPUT_DIR, help="Output directory (default: results/)."
+    )
+    analyze_parser.add_argument(
+        "--ph", type=float, default=DEFAULT_PH, help="pH for net charge (default: 7.0)."
+    )
+
     args = parser.parse_args(argv)
     if args.command == "summarize":
         return summarize(args.fasta)
+    if args.command == "analyze":
+        return analyze(args.fasta, args.output, args.ph)
     return 1
 
 if __name__ == "__main__":

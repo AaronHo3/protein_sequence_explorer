@@ -10,8 +10,8 @@ This is the first in a series of protein bioinformatics projects. The goal is a 
 |---|---|
 | 1. FASTA parsing and validation | Done |
 | 2. Sequence features | Done |
-| 3. DataFrames, CSV export, `analyze` CLI | Next |
-| 4. Visualization | Planned |
+| 3. DataFrames, CSV export, `analyze` CLI | Done |
+| 4. Visualization | Next |
 | 5. Biopython validation report | Planned |
 | 6. Streamlit app | Planned |
 | 7. Documentation and demo | Planned |
@@ -26,6 +26,12 @@ uv pip install -e ".[dev]"
 
 # Validate a FASTA file and print a summary table
 uv run python -m protein_explorer summarize data/sample.fasta
+
+# Compute all features and write CSV tables to results/
+uv run python -m protein_explorer analyze data/sample.fasta --output results/
+
+# Same, with net charge calculated at pH 7.4
+uv run python -m protein_explorer analyze data/sample.fasta --output results/ --ph 7.4
 
 # Run the tests
 uv run pytest
@@ -42,6 +48,21 @@ These are full **precursor** sequences, including signal peptides and propeptide
 1. **Parsing** (`fasta.py`). Reads records without modifying residues. Malformed files (sequence before a header, empty records, duplicate IDs) raise `FastaFormatError` with a line number.
 2. **Validation** (`validation.py`). Flags invalid characters with their positions. Counts ambiguous (B/Z/J/X) and nonstandard (U/O) residues, accepts a terminal stop `*`, and rejects sequences that look like DNA or RNA (at least 20 residues long and at least 90% ACGTUN). Invalid sequences are reported rather than dropped.
 3. **Features** (`features.py`), described below.
+4. **Tables** (`dataset.py`). Builds pandas tables with one row per protein, indexed by FASTA identifier, and extracts the UniProt accession. Invalid sequences stay in the table with `NaN` features. A feature that can't be computed (e.g. molecular weight for a sequence containing `X`) is `NaN`, with the reason in `feature_errors`.
+5. **Export** (`export.py`). Writes the tables as CSV files, plus a record of how they were produced.
+
+## Outputs
+
+`analyze` writes four files to the output directory:
+
+| File | Contents |
+|---|---|
+| `features.csv` | One row per protein: accession, description, length, validation results, all features, warnings, and feature errors |
+| `composition.csv` | One row per protein: the 20 amino acid frequencies |
+| `summary.csv` | Count, mean, standard deviation, min, quartiles, and max of each numeric feature across valid proteins |
+| `run_info.json` | Input file and its SHA-256 checksum, record counts, pH, pKa set, mass type, and software versions |
+
+`features.csv` and `composition.csv` share the identifier column, so joining them gives a feature matrix with one row per protein and about 35 columns, ready for ML.
 
 ## Features
 
@@ -76,7 +97,9 @@ src/protein_explorer/
   fasta.py         FASTA parser
   validation.py    sequence validation
   features.py      feature calculations
-  __main__.py      command-line interface
+  dataset.py       pandas feature, composition, and summary tables
+  export.py        CSV and run_info.json export
+  __main__.py      command-line interface (summarize, analyze)
 tests/             pytest suite and malformed-file fixtures
 data/              sample FASTA and provenance
 ```

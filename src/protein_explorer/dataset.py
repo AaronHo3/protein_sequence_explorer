@@ -1,0 +1,103 @@
+# Organises parsed records into pandas tables: one row per protein. Invalid records
+# are kept as rows with NaN features, never dropped.
+
+import re
+from collections.abc import Callable
+
+import pandas as pd
+
+from protein_explorer import features
+from protein_explorer.fasta import FastaRecord
+from protein_explorer.validation import validate_sequence
+
+# UniProt FASTA identifiers look like sp|P01308|INS_HUMAN or tr|A0A024R161|..., with
+# optional isoform suffix (P04637-2)
+UNIPROT_ID = re.compile(r"^(?:sp|tr)\|([A-Z0-9]+(?:-\d+)?)\|")
+
+COUNT_COLUMNS = (
+    "length", "ambiguous_count", "nonstandard_count",
+    "unique_residue_types", "acidic_count", "basic_count",
+)
+
+def parse_accession(identifier: str) -> str | None:
+    """Extract the UniProt accession from a FASTA identifier, or None if not UniProt."""
+    match = UNIPROT_ID.match(identifier)
+    return match.group(1) if match else None
+
+def _feature_functions(ph: float) -> dict[str, Callable[[str], float]]:
+    """Feature columns in output order. Net charge column is named after its pH."""
+    return {
+        "unique_residue_types": features.unique_residue_types,
+        "molecular_weight": features.molecular_weight,
+        "isoelectric_point": features.isoelectric_point,
+        f"net_charge_ph{ph:g}": lambda seq: features.net_charge(seq, ph),
+        "gravy": features.gravy,
+        "hydrophobic_fraction": features.hydrophobic_fraction,
+        "charged_fraction": features.charged_fraction,
+        "aromatic_fraction": features.aromatic_fraction,
+        "acidic_count": features.acidic_count,
+        "basic_count": features.basic_count,
+    }
+
+def _compute_features(sequence: str, ph: float) -> tuple[dict[str, float], list[str]]:
+    """Compute every feature; a feature that raises ValueError becomes NaN with a reason."""
+    values: dict[str, float] = {}
+    errors: list[str] = []
+    for name, func in _feature_functions(ph).items():
+        try:
+            values[name] = func(sequence)
+        except ValueError as error:
+            values[name] = float("nan")
+            errors.append(f"{name}: {error}")
+    return values, errors
+
+def _feature_row(record: FastaRecord, ph: float) -> dict[str, object]:
+    """One table row: metadata, validation results, and features (NaN if invalid)."""
+    result = validate_sequence(record.sequence)
+    if result.is_valid:
+        values, errors = _compute_features(record.sequence, ph)
+    else:
+        values = {name: float("nan") for name in _feature_functions(ph)}
+        errors = ["not computed: sequence failed validation"]
+    return {
+        "identifier": record.identifier,
+        "accession": parse_accession(record.identifier),
+        "description": record.description,
+        "length": len(record.sequence.removesuffix("*")),
+        "is_valid": result.is_valid,
+        "ambiguous_count": result.ambiguous_count,
+        "nonstandard_count": result.nonstandard_count,
+        "has_terminal_stop": result.has_terminal_stop,
+        **values,
+        "warnings": "; ".join(result.warnings),
+        "feature_errors": "; ".join(errors),
+    }
+
+def build_feature_table(records: list[FastaRecord], ph: float = 7.0) -> pd.DataFrame:
+    """One row per record, indexed by identifier, in input order."""
+    table = pd.DataFrame([_feature_row(record, ph) for record in records])
+    table = table.set_index("identifier")
+    # Nullable integers keep counts as ints even when some rows are NaN
+    return table.astype({column: "Int64" for column in COUNT_COLUMNS})
+
+def build_composition_table(records: list[FastaRecord]) -> pd.DataFrame:
+    """Amino acid frequencies: one row per record, 20 residue columns. Invalid rows are NaN."""
+    rows = {
+        record.identifier: (
+            features.residue_frequencies(record.sequence)
+            if validate_sequence(record.sequence).is_valid
+            else dict.fromkeys(features.AMINO_ACIDS, float("nan"))
+        )
+        for record in records
+    }
+    table = pd.DataFrame.from_dict(rows, orient="index", columns=list(features.AMINO_ACIDS))
+    table.index.name = "identifier"
+    table.columns.name = "residue"
+    return table
+
+def summarize_features(table: pd.DataFrame) -> pd.DataFrame:
+    """Descriptive statistics across valid proteins: one row per numeric feature."""
+    numeric = table.loc[table["is_valid"]].select_dtypes("number")
+    summary = numeric.astype(float).describe().T
+    summary.index.name = "feature"
+    return summary

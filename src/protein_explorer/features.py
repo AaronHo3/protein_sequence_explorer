@@ -44,6 +44,7 @@ POSITIVE_PKA: dict[str, float] = {"Nterm": 8.6, "K": 10.8, "R": 12.5, "H": 6.5}
 NEGATIVE_PKA: dict[str, float] = {
     "Cterm": 3.6, "D": 3.9, "E": 4.1, "C": 8.5, "Y": 10.1, "U": 5.2,
 }
+PKA_SET = "EMBOSS (U: 5.2, literature estimate)"  # recorded in run metadata
 PI_TOLERANCE = 1e-4
 
 def _residues(sequence: str) -> str:
