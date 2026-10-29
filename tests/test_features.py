@@ -7,6 +7,13 @@ import pytest
 from protein_explorer.fasta import read_fasta
 from protein_explorer.features import (
     AMINO_ACIDS,
+    KYTE_DOOLITTLE,
+    acidic_count,
+    aromatic_fraction,
+    basic_count,
+    charged_fraction,
+    gravy,
+    hydrophobic_fraction,
     residue_counts,
     residue_frequencies,
     sequence_length,
@@ -124,3 +131,107 @@ def test_sample_frequencies_sum_to_one(sample):
     # Reviewed Swiss-Prot entries contain only standard residues
     for identifier, sequence in sample.items():
         assert sum(residue_frequencies(sequence).values()) == pytest.approx(1.0), identifier
+
+
+# --- Biochemical fractions and counts ----------------------------------------
+
+
+def test_worked_example_biochemical_features():
+    # M A L W M R L L P L: 8 hydrophobic (M,A,L,W), 1 charged (R), 1 aromatic (W)
+    assert hydrophobic_fraction(INSULIN_SIGNAL_START) == pytest.approx(0.8)
+    assert charged_fraction(INSULIN_SIGNAL_START) == pytest.approx(0.1)
+    assert aromatic_fraction(INSULIN_SIGNAL_START) == pytest.approx(0.1)
+    assert acidic_count(INSULIN_SIGNAL_START) == 0
+    assert basic_count(INSULIN_SIGNAL_START) == 1
+
+
+def test_histidine_is_basic_but_not_charged():
+    assert basic_count("HHH") == 3
+    assert charged_fraction("HHH") == 0.0
+
+
+def test_histidine_is_not_aromatic():
+    # Matches Biopython's aromaticity definition (F, W, Y only)
+    assert aromatic_fraction("HFWY") == pytest.approx(0.75)
+
+
+def test_glycine_and_cysteine_are_not_hydrophobic():
+    assert hydrophobic_fraction("GGCC") == 0.0
+
+
+def test_fractions_use_full_length_as_denominator():
+    # X counts toward length, so 3 hydrophobic of 4 residues
+    assert hydrophobic_fraction("LLLX") == pytest.approx(0.75)
+
+
+def test_fractions_ignore_terminal_stop_and_case():
+    assert hydrophobic_fraction("llk*") == pytest.approx(2 / 3)
+
+
+# --- GRAVY -------------------------------------------------------------------
+
+
+def test_kyte_doolittle_covers_exactly_the_standard_residues():
+    assert tuple(sorted(KYTE_DOOLITTLE)) == AMINO_ACIDS
+
+
+def test_gravy_worked_example():
+    # (1.9+1.8+3.8-0.9+1.9-4.5+3.8+3.8-1.6+3.8) / 10
+    assert gravy(INSULIN_SIGNAL_START) == pytest.approx(1.38)
+
+
+def test_gravy_single_residues_match_scale():
+    assert gravy("I") == pytest.approx(4.5)
+    assert gravy("R") == pytest.approx(-4.5)
+
+
+def test_gravy_excludes_ambiguous_residues_from_mean():
+    assert gravy("IIX") == pytest.approx(4.5)
+    assert gravy("IIU") == pytest.approx(4.5)
+
+
+def test_gravy_all_ambiguous_raises():
+    with pytest.raises(ValueError, match="no standard residues"):
+        gravy("XXX")
+
+
+@pytest.mark.parametrize(
+    "func",
+    [hydrophobic_fraction, charged_fraction, aromatic_fraction, acidic_count, basic_count, gravy],
+)
+def test_biochemical_features_reject_empty_sequence(func):
+    with pytest.raises(ValueError):
+        func("*")
+
+
+# --- Biochemical features on real data ---------------------------------------
+
+
+def test_calmodulin_is_strongly_acidic(sample):
+    # EF-hand Ca2+-binding loops are rich in Asp/Glu
+    calmodulin = sample["sp|P0DP23|CALM1_HUMAN"]
+    assert acidic_count(calmodulin) == 38
+    assert basic_count(calmodulin) == 15
+
+
+def test_lysozyme_is_basic(sample):
+    # Cationic enzyme that binds anionic bacterial cell walls
+    lysozyme = sample["sp|P00698|LYSC_CHICK"]
+    assert basic_count(lysozyme) > 2 * acidic_count(lysozyme)
+
+
+@pytest.mark.parametrize(
+    ("identifier", "expected_gravy", "expected_aromaticity"),
+    [
+        # Reference values from Biopython ProteinAnalysis (rounded to 3 dp)
+        ("sp|P01308|INS_HUMAN", 0.193, 0.082),
+        ("sp|P04637|P53_HUMAN", -0.756, 0.061),
+        ("sp|P42212|GFP_AEQVI", -0.521, 0.105),
+        ("sp|P68871|HBB_HUMAN", 0.014, 0.088),
+    ],
+)
+def test_sample_gravy_and_aromaticity_match_reference(
+    sample, identifier, expected_gravy, expected_aromaticity
+):
+    assert gravy(sample[identifier]) == pytest.approx(expected_gravy, abs=5e-4)
+    assert aromatic_fraction(sample[identifier]) == pytest.approx(expected_aromaticity, abs=5e-4)
