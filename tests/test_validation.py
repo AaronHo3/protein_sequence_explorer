@@ -166,3 +166,14 @@ def test_all_sample_records_are_valid():
         result = validate_sequence(record.sequence)
         assert result.is_valid, f"{record.identifier}: {result.warnings}"
         assert result.invalid_residues == ()
+
+
+def test_invalid_warning_lists_positions():
+    result = validate_sequence("MK-TAYI")
+    assert any("'-' at 3" in w for w in result.warnings)
+
+
+def test_invalid_warning_summarises_beyond_five_positions():
+    result = validate_sequence("M-------K")
+    warning = next(w for w in result.warnings if "invalid" in w)
+    assert "'-' at 2" in warning and "and 2 more" in warning

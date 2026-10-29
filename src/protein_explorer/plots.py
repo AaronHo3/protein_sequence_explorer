@@ -13,37 +13,21 @@ from matplotlib.patches import Patch
 from protein_explorer.dataset import build_composition_table, build_feature_table
 from protein_explorer.fasta import FastaRecord
 from protein_explorer.features import hydropathy_profile
+from protein_explorer.residues import RESIDUE_CLASSES, RESIDUE_ORDER  # noqa: F401 (re-exported)
+from protein_explorer.visualization.theme import LIGHT
 
-# Chart ink and chrome (light surface)
-SURFACE = "#fcfcfb"
-INK = "#0b0b0b"
-INK_SECONDARY = "#52514e"
-MUTED = "#898781"
-GRIDLINE = "#e1e0d9"
-BASELINE = "#c3c2b7"
-
-# Categorical slots in fixed order (validated for colour-vision deficiency)
-SERIES = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4")
-# Diverging poles for signed values; sequential blue ramp for magnitude
-NEGATIVE, POSITIVE = "#2a78d6", "#e34948"
-SEQUENTIAL = LinearSegmentedColormap.from_list(
-    "seq_blue", ["#cde2fb", "#86b6ef", "#3987e5", "#256abf", "#184f95", "#0d366b"]
-)
-
-# Disjoint chemical classes used to group and colour residues. Display order is
-# also the x-axis order, so each class forms one contiguous block.
-RESIDUE_CLASSES: dict[str, str] = {
-    "Nonpolar": "GAVLIMP",
-    "Aromatic": "FWY",
-    "Polar": "STCNQ",
-    "Acidic": "DE",
-    "Basic": "KRH",
-}
-RESIDUE_ORDER: tuple[str, ...] = tuple("".join(RESIDUE_CLASSES.values()))
-CLASS_COLORS = dict(zip(RESIDUE_CLASSES, SERIES, strict=True))
-RESIDUE_COLORS = {
-    residue: CLASS_COLORS[name] for name, members in RESIDUE_CLASSES.items() for residue in members
-}
+# Static figures use the light palette (publication / print)
+SURFACE = LIGHT.surface
+INK = LIGHT.ink
+INK_SECONDARY = LIGHT.ink_secondary
+MUTED = LIGHT.muted
+GRIDLINE = LIGHT.gridline
+BASELINE = LIGHT.baseline
+SERIES = LIGHT.series
+NEGATIVE, POSITIVE = LIGHT.diverging_low, LIGHT.diverging_high
+SEQUENTIAL = LinearSegmentedColormap.from_list("seq_blue", list(LIGHT.sequential))
+CLASS_COLORS = dict(zip(RESIDUE_CLASSES, LIGHT.series, strict=True))
+RESIDUE_COLORS = {r: CLASS_COLORS[c] for c, members in RESIDUE_CLASSES.items() for r in members}
 
 MEAN_RESIDUE_MASS = 110.0  # Da, common rule of thumb for MW ≈ 110 × length
 TM_THRESHOLD = 1.6  # Kyte-Doolittle transmembrane cutoff (window 19)

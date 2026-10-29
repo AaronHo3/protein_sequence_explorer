@@ -63,3 +63,41 @@ def test_run_info_records_provenance(written):
     assert info["net_charge_ph"] == 7.0
     assert "EMBOSS" in info["pka_set"]
     assert info["protein_explorer_version"]
+
+
+# --- FASTA export, analysis report, figure bundle ----------------------------
+
+
+def test_fasta_export_round_trips_sample_exactly():
+    from protein_explorer.export import records_to_fasta
+    assert records_to_fasta(read_fasta(SAMPLE_FASTA)) == SAMPLE_FASTA.read_text()
+
+
+def test_fasta_export_preserves_residues_and_wraps():
+    from protein_explorer.export import records_to_fasta
+    from protein_explorer.fasta import FastaRecord
+    text = records_to_fasta([FastaRecord("x", "", "mktXAY*")], line_width=3)
+    assert text == ">x\nmkt\nXAY\n*\n"
+    with pytest.raises(ValueError):
+        records_to_fasta([], line_width=0)
+
+
+def test_analysis_report_contents():
+    from protein_explorer.dataset import build_count_table, dataset_composition
+    from protein_explorer.export import build_analysis_report
+    records = read_fasta(SAMPLE_FASTA)
+    features = build_feature_table(records)
+    comp = dataset_composition(build_count_table(records), features["length"])
+    report = build_analysis_report(features, build_run_info(SAMPLE_FASTA, features, 7.0), comp)
+    assert "## Per-protein features" in report and "## Assumptions" in report
+    assert r"sp\|P01308\|INS_HUMAN" in report  # pipes escaped for Markdown tables
+    assert "SHA-256" in report and "EMBOSS" in report
+
+
+def test_static_figure_bundle_contains_all_figures():
+    import io
+    import zipfile
+    from protein_explorer.visualization.export import static_figure_bundle
+    names = zipfile.ZipFile(io.BytesIO(static_figure_bundle(read_fasta(SAMPLE_FASTA)))).namelist()
+    assert len(names) == 20
+    assert "hydropathy/INS_HUMAN.png" in names and "mw_vs_length.png" in names

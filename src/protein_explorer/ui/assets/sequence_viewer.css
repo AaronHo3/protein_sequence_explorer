@@ -1,0 +1,179 @@
+/* Sequence viewer styles. Chrome colours come from Streamlit's theme variables so the
+   viewer follows light/dark mode; residue fills come from the payload. */
+
+.pev {
+  position: relative;
+  font-family: var(--st-font, "IBM Plex Sans", system-ui, sans-serif);
+  color: var(--st-text-color, #0b0b0b);
+  outline: none;
+}
+.pev:focus-visible {
+  outline: 2px solid var(--pev-selection);
+  outline-offset: 6px;
+  border-radius: 4px;
+}
+
+.pev-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+.pev-status {
+  font-size: 13px;
+  color: var(--pev-muted);
+}
+.pev-actions {
+  display: flex;
+  gap: 6px;
+}
+.pev-actions button {
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--st-border-color, rgba(128, 128, 128, 0.35));
+  background: var(--pev-raised);
+  color: inherit;
+  cursor: pointer;
+}
+.pev-actions button:hover {
+  border-color: var(--pev-selection);
+  color: var(--pev-selection);
+}
+.pev-actions button:focus-visible {
+  outline: 2px solid var(--pev-selection);
+  outline-offset: 1px;
+}
+
+.pev-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  color: var(--pev-muted);
+}
+.pev-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pev-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.pev-gradient {
+  width: 40px;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.pev-scroll {
+  max-height: 460px;
+  overflow: auto;
+  padding: 2px 2px 6px;
+}
+.pev-lines {
+  font-family: var(--st-code-font, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 13px;
+  width: max-content;
+}
+.pev-line {
+  /* Browser-native virtualisation: off-screen lines skip layout and paint */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 32px;
+  margin-bottom: 6px;
+}
+.pev-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.pev-num {
+  width: 46px;
+  flex: none;
+  text-align: right;
+  color: var(--pev-muted);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.pev-block {
+  display: inline-flex;
+  gap: 1px;
+}
+.pev-r {
+  display: inline-block;
+  width: 17px;
+  height: 21px;
+  line-height: 21px;
+  text-align: center;
+  border-radius: 3px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+.pev-r:hover {
+  box-shadow: 0 0 0 2px var(--pev-selection);
+  position: relative;
+  z-index: 1;
+}
+.pev-r.pev-sel {
+  box-shadow: 0 0 0 2px var(--pev-selection);
+  position: relative;
+  z-index: 2;
+}
+.pev-track-row .pev-t {
+  display: inline-block;
+  width: 17px;
+  height: 6px;
+  cursor: pointer;
+}
+.pev-track-row {
+  margin-top: 2px;
+}
+.pev-annotation-row .pev-a {
+  display: inline-block;
+  width: 17px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.pev-tooltip {
+  position: absolute;
+  z-index: 10;
+  min-width: 190px;
+  max-width: 280px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--pev-raised);
+  border: 1px solid var(--st-border-color, rgba(128, 128, 128, 0.35));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  font-size: 12.5px;
+  pointer-events: none;
+}
+.pev-tt-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.pev-tt-code {
+  font-weight: 400;
+  color: var(--pev-muted);
+}
+.pev-tt-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+}
+.pev-tt-k {
+  color: var(--pev-muted);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pev-r { transition: box-shadow 80ms ease-out; }
+}

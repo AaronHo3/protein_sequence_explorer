@@ -2,7 +2,9 @@
 
 A Python toolkit for reading protein FASTA files, validating sequences, and calculating biochemical features. The parser and features are written from scratch and checked against Biopython.
 
-This is the first in a series of protein bioinformatics projects. The goal is a reliable foundation of hand-built sequence features to reuse later as inputs to machine learning models and as baselines against them, including protein language models (ESM), mutation-effect prediction, and protein design. 
+This is the first in a series of protein bioinformatics projects. The goal is a reliable foundation of hand-built sequence features to reuse later as inputs to machine learning models and as baselines against them, including protein language models (ESM), mutation-effect prediction, and protein design.
+
+![Protein page: sequence viewer with residues 1–18 (the lysozyme signal peptide) selected and summarised in the residue inspector](docs/screenshots/protein_sequence_viewer.png)
 
 ## Status
 
@@ -13,35 +15,76 @@ This is the first in a series of protein bioinformatics projects. The goal is a 
 | 3. DataFrames, CSV export, `analyze` CLI | Done |
 | 4. Visualization | Done |
 | 5. Biopython validation report | Done |
-| 6. Streamlit app | Next |
-| 7. Documentation and demo | Planned |
+| 6. Interactive app (redesigned) | Done |
+| 7. Documentation and demo | Done ([demo script](docs/DEMO.md)) |
 
-## Running it
+## Installation and launch
 
 Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv venv
-uv pip install -e ".[dev]"
+uv pip install -e ".[dev,app]"   # app = Streamlit, Plotly, SciPy; dev = pytest, Biopython
 
-# Validate a FASTA file and print a summary table
-uv run python -m protein_explorer summarize data/sample.fasta
-
-# Compute all features and write CSV tables to results/
-uv run python -m protein_explorer analyze data/sample.fasta --output results/
-
-# Same, with net charge calculated at pH 7.4
-uv run python -m protein_explorer analyze data/sample.fasta --output results/ --ph 7.4
-
-# Generate all figures in results/figures/ (PNG by default; also svg or pdf)
-uv run python -m protein_explorer plot data/sample.fasta --output results/figures/ --window 9 --format png
-
-# Compare against Biopython and write docs/validation_report.md (needs the dev extra)
-uv run python -m protein_explorer.crosscheck data/sample.fasta --output docs/validation_report.md
+# Interactive app (opens http://localhost:8501)
+uv run streamlit run app/streamlit_app.py
 
 # Run the tests
 uv run pytest
 ```
+
+### Command line
+
+```bash
+# Validate a FASTA file and print a summary table
+uv run python -m protein_explorer summarize data/sample.fasta
+
+# Compute all features and write CSV tables (net charge at pH 7.4)
+uv run python -m protein_explorer analyze data/sample.fasta --output results/ --ph 7.4
+
+# Static 300 dpi figures (png, svg, or pdf)
+uv run python -m protein_explorer plot data/sample.fasta --output results/figures/ --window 9
+
+# Compare against Biopython and write docs/validation_report.md
+uv run python -m protein_explorer.crosscheck data/sample.fasta --output docs/validation_report.md
+```
+
+## The app
+
+The app follows the workflow **Import → Overview → Protein → Compare → Export**. It opens on the bundled example dataset. The sidebar holds the protein picker, filters (search, validity, length), and the pH used for charge. Selections are shared: picking a protein anywhere updates every page, and a residue selection made in the sequence viewer or on the hydropathy plot appears in both, and in the inspector.
+
+| Page | What it does |
+|---|---|
+| Import | Drag-and-drop FASTA upload, example loader, workspace reset, and a per-record validation table (valid, valid with warnings, failed). A malformed file is rejected with its line number and the previous dataset stays loaded. |
+| Overview | Protein count, total residues, mean and median length, mean molecular weight, pI summary; length and pI distributions; molecular weight vs length with a least-squares fit; dataset composition, residue-weighted vs protein-weighted. |
+| Protein | Metric cards, the interactive sequence viewer and residue inspector, the hydropathy profile, and composition (counts or percent, three sort orders, dataset reference). |
+| Compare | Property scatter (any two of 8 properties; click a point to open that protein, drag a box to compare a subset), normalized property heatmap, composition heatmap with clustering, and a filterable comparison table. |
+| Export | Feature, composition, count, summary, and dataset-composition CSVs; FASTA (all, valid, or filtered); a Markdown analysis report; run information JSON; a ZIP of 300 dpi figures. Every chart also saves a PNG from its toolbar. |
+
+| Overview | Compare | Dark mode |
+|---|---|---|
+| ![Overview](docs/screenshots/overview.png) | ![Compare](docs/screenshots/compare.png) | ![Protein page in dark mode](docs/screenshots/protein_dark.png) |
+
+### Sequence viewer
+
+- Residues in blocks of 10 with 1-based position numbers, wrapped to fit the width or at 30–100 per line
+- Seven colouring modes: chemical class, amino acid identity, hydrophobic/hydrophilic, charge, polar/nonpolar, aromatic, and acidic/basic/neutral. Each mode uses the same residue sets as the matching feature, so colouring by "hydrophobic" highlights exactly the residues counted by the hydrophobic fraction.
+- Hover for name, one- and three-letter code, position, class, the residue's hydropathy, and the window mean at that position
+- Click to select, shift-click for a range, arrow keys to move (shift extends), Escape to clear
+- An optional hydropathy strip under each line, copy sequence or selection, and FASTA download of the protein or a selected region
+- The inspector shows side-chain pKa and charge at the chosen pH for one residue, or segment statistics for a range
+
+### Hydropathy profile
+
+Per-residue Kyte–Doolittle values (bars) are drawn separately from the sliding-window mean (line), with the hydrophobic (> 0) and hydrophilic (< 0) regions shaded. The window is adjustable (5–21, odd). Window means exist only where a full window fits, so the first and last `window // 2` residues have none and the line is not extrapolated. Dragging across the plot selects those residues in the viewer, and the current selection is marked on the plot. The 1.6 transmembrane reference is off by default, because a peak above it is not evidence of a membrane helix on its own (see Findings).
+
+![Hydropathy profile with residues 1–18 selected](docs/screenshots/protein_hydropathy.png)
+
+### Comparison views
+
+- **Normalized properties:** each property is z-scored across the proteins being compared, (value − mean) / SD, so properties in different units share one diverging scale. Colour is relative to the set, not absolute; hover shows the raw value.
+- **Composition heatmap:** proteins × amino acids (percent), columns grouped by chemical class. Rows can be ordered by file, name, the frequency of any residue, or average-linkage hierarchical clustering on Euclidean distance between composition vectors.
+- **Dataset composition:** residue-weighted pools every residue, so long proteins dominate. Protein-weighted averages each protein's own composition, so every protein counts equally.
 
 ## Data
 
@@ -53,34 +96,10 @@ These are full **precursor** sequences, including signal peptides and propeptide
 
 1. **Parsing** (`fasta.py`). Reads records without modifying residues. Malformed files (sequence before a header, empty records, duplicate IDs) raise `FastaFormatError` with a line number.
 2. **Validation** (`validation.py`). Flags invalid characters with their positions. Counts ambiguous (B/Z/J/X) and nonstandard (U/O) residues, accepts a terminal stop `*`, and rejects sequences that look like DNA or RNA (at least 20 residues long and at least 90% ACGTUN). Invalid sequences are reported rather than dropped.
-3. **Features** (`features.py`), described below.
-4. **Tables** (`dataset.py`). Builds pandas tables with one row per protein, indexed by FASTA identifier, and extracts the UniProt accession. Invalid sequences stay in the table with `NaN` features. A feature that can't be computed (e.g. molecular weight for a sequence containing `X`) is `NaN`, with the reason in `feature_errors`.
-5. **Export** (`export.py`). Writes the tables as CSV files, plus a record of how they were produced.
-6. **Figures** (`plots.py`). Static matplotlib figures at 300 dpi. Residues are coloured and grouped by chemical class (nonpolar, aromatic, polar, acidic, basic) using a colour-blind-safe palette.
-
-## Outputs
-
-`analyze` writes four files to the output directory:
-
-| File | Contents |
-|---|---|
-| `features.csv` | One row per protein: accession, description, length, validation results, all features, warnings, and feature errors |
-| `composition.csv` | One row per protein: the 20 amino acid frequencies |
-| `summary.csv` | Count, mean, standard deviation, min, quartiles, and max of each numeric feature across valid proteins |
-| `run_info.json` | Input file and its SHA-256 checksum, record counts, pH, pKa set, mass type, and software versions |
-
-`features.csv` and `composition.csv` share the identifier column, so joining them gives a feature matrix with one row per protein and about 35 columns, ready for ML.
-
-`plot` writes these figures:
-
-| Figure | What it shows |
-|---|---|
-| `length_distribution` | Histogram of sequence lengths |
-| `gravy_comparison` | GRAVY per protein, sorted; red is hydrophobic, blue is hydrophilic |
-| `mw_vs_length` | Molecular weight against length, with a 110 Da per residue reference line |
-| `composition_heatmap` | Residue frequencies, proteins × amino acids |
-| `composition/<entry>` | One protein's composition, with the dataset mean marked for each residue |
-| `hydropathy/<entry>` | Sliding-window Kyte–Doolittle profile along the sequence |
+3. **Features** (`features.py`) and residue reference data (`residues.py`), described below.
+4. **Tables** (`dataset.py`). One row per protein with UniProt metadata (accession, protein name, organism, gene). Invalid sequences stay in the table with `NaN` features; a feature that can't be computed is `NaN` with the reason in `feature_errors`.
+5. **Export** (`export.py`). CSV tables, `run_info.json` (input SHA-256, pH, pKa set, versions), FASTA that round-trips the input byte for byte, and a Markdown analysis report.
+6. **Figures**. Static matplotlib figures (`plots.py`) and interactive Plotly figures (`visualization/`), sharing one colour-blind-safe palette with separate light and dark steps.
 
 ## Features
 
@@ -120,19 +139,49 @@ All features are **estimates calculated from sequence**, not measured values. Am
 - **Residue handling vs Biopython:** Biopython's GRAVY raises an error on X, B, or U, and it counts a terminal `*` as a residue. We skip unknown residues in averages and strip `*`.
 - **Transmembrane threshold:** none of the 8 sample proteins sits in a membrane, yet lysozyme and β2-microglobulin exceed the Kyte–Doolittle transmembrane cutoff (1.6 at window 19). In both, the peak falls in the signal peptide, so hydropathy alone can't tell a signal peptide from a transmembrane helix.
 
-## Project layout
+## Known limitations
+
+- All values are estimates from the sequence as written. UniProt sequences are precursors, so signal peptides and propeptides are included, and post-translational modifications, disulfides, and structural pKa shifts are not modelled.
+- pI and charge depend on the pKa set (EMBOSS here). Values from other tools can differ by about 0.5 pH units.
+- Hydropathy cannot distinguish signal peptides from transmembrane helices, and residue classifications such as Cys, Tyr, and His are context-dependent.
+- Hovering on the hydropathy chart does not highlight the sequence live, because Streamlit sends chart events only on selection. The hydropathy strip inside the viewer provides the same linkage on hover.
+- Very long sequences (titin, 34,350 residues) render in under a second, but each selection takes about 2 s round trip. Per-residue hydropathy bars are turned off above 3,000 residues.
+- The app is designed for desktop and laptop screens. It works on narrow screens but is not optimised for them.
+
+## Architecture
 
 ```
 src/protein_explorer/
-  fasta.py         FASTA parser
-  validation.py    sequence validation
-  features.py      feature calculations
-  dataset.py       pandas feature, composition, and summary tables
-  export.py        CSV and run_info.json export
-  plots.py         matplotlib figures
-  crosscheck.py    comparison with Biopython (dev only)
-  __main__.py      command-line interface (summarize, analyze, plot)
-tests/             pytest suite and malformed-file fixtures
-data/              sample FASTA and provenance
-docs/              validation report
+  fasta.py, validation.py, features.py   parsing, validation, feature calculations
+  residues.py                            per-residue reference data (codes, names, pKa, hydropathy)
+  dataset.py, export.py                  tables, metadata, CSV/FASTA/report export
+  plots.py                               static matplotlib figures (CLI)
+  crosscheck.py                          comparison with Biopython (dev only)
+  visualization/                         Plotly figures and data models, no Streamlit
+    theme.py            colour tokens (light/dark), chart styling, contrast helpers
+    color_schemes.py    seven residue colouring schemes
+    sequence_viewer.py  viewer data model: ResidueRange, tracks, annotations, positions
+    hydropathy.py, composition.py, distributions.py, comparison.py, heatmaps.py, export.py
+  ui/                                    Streamlit layer
+    state.py            dataset, cached analysis, filters, shared selections
+    sequence_viewer.py  custom component (assets/sequence_viewer.js, .css)
+    residue_inspector.py, metric_cards.py, protein_selector.py, chart_controls.py, sidebar.py
+    pages/              import, overview, protein, compare, export
+app/streamlit_app.py, app/views/         entry point and thin page files
+tests/                                   414 tests, including headless app tests
 ```
+
+Scientific code never imports plotting or Streamlit. Visualization functions take data and a palette and return a figure. The sequence viewer is a reusable component with three extension points built in:
+- `tracks`: per-residue values drawn under the sequence (hydropathy now; conservation scores or measurements later)
+- `annotations`: labelled ranges such as domains or mutations
+- `positions`: a column-to-residue mapping, so gapped alignment rows keep correct numbering
+
+## Testing
+
+`uv run pytest` runs 414 tests: parsing, validation, features, Biopython agreement, tables, exports, every figure builder, the viewer payload, the residue inspector, and every app page through Streamlit's `AppTest`. The browser interactions (click, shift-click, keyboard, drag on the hydropathy plot, scatter click, uploads, downloads, light and dark mode, 1024 px layout) were checked in a real browser with Playwright. They are not part of the automated suite.
+
+## Roadmap
+
+- **Project 2, Evolution & Sequence Alignment Lab:** pairwise and multiple alignments in the viewer (via `positions`), conservation scores as tracks, sequence logos.
+- **Project 3, Protein Structure Workbench:** link viewer selections to residues in a 3D structure; mutation annotations.
+- **ML:** use the feature matrix (`features.csv` joined with `composition.csv`) as a baseline against ESM embeddings, and extract mature chains from UniProt annotations so features describe the functional protein.

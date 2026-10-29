@@ -1,0 +1,29 @@
+# Theme for the Streamlit app. Colours match src/protein_explorer/palette.py, so the app,
+# its charts, and the exported figures share one palette.
+
+[theme]
+font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+headingFontWeights = 600
+baseRadius = "small"
+showWidgetBorder = true
+
+[theme.light]
+primaryColor = "#2a78d6"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f0efec"
+textColor = "#0b0b0b"
+borderColor = "#e1e0d9"
+
+[theme.dark]
+primaryColor = "#3987e5"
+backgroundColor = "#1a1a19"
+secondaryBackgroundColor = "#242422"
+textColor = "#f0efec"
+borderColor = "#383835"
+
+[server]
+maxUploadSize = 50
+
+[client]
+toolbarMode = "viewer"  # hides the Deploy button

@@ -1,0 +1,6 @@
+>good_peptide Valid test protein
+MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQ
+>gapped Contains an alignment gap
+MKTAYIAK-QRQISFVKSHF
+>dna_seq Nucleotide sequence labelled as protein
+ATGGCTAGCTAGGCTACGATCGATCGTAGCTAGCTAG

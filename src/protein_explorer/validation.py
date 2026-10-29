@@ -13,6 +13,8 @@ STOP = "*"
 NUCLEOTIDE_CHECK_MIN_LENGTH = 20
 # Real proteins are ~22% A+C+G+T; >= 90% is almost certainly nucleic acid
 NUCLEOTIDE_FRACTION_THRESHOLD = 0.9
+# Positions listed in the invalid-character warning before summarising the rest
+MAX_REPORTED_POSITIONS = 5
 
 @dataclass(frozen=True)
 class ValidationResult:
@@ -68,7 +70,9 @@ def validate_sequence(sequence: str) -> ValidationResult:
     if has_terminal_stop:
         warnings.append("Sequence ends with a stop codon '*'.")
     if invalid:
-        warnings.append(f"Sequence contains {len(invalid)} invalid character(s).")
+        shown = ", ".join(f"'{char}' at {pos}" for pos, char in invalid[:MAX_REPORTED_POSITIONS])
+        more = f" and {len(invalid) - MAX_REPORTED_POSITIONS} more" if len(invalid) > MAX_REPORTED_POSITIONS else ""
+        warnings.append(f"Sequence contains {len(invalid)} invalid character(s): {shown}{more}.")
 
     # A sequence with no determinable residues carries no usable information
     all_ambiguous = len(residues) > 0 and ambiguous_count == len(residues)

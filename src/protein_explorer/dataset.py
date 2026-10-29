@@ -24,6 +24,17 @@ def parse_accession(identifier: str) -> str | None:
     match = UNIPROT_ID.match(identifier)
     return match.group(1) if match else None
 
+# UniProt FASTA descriptions: "<name> OS=<organism> OX=<taxid> GN=<gene> PE=<n> SV=<n>"
+UNIPROT_FIELDS = re.compile(r"\s(OS|OX|GN|PE|SV)=")
+
+def parse_uniprot_description(description: str) -> dict[str, str | None]:
+    """Protein name, organism, and gene from a UniProt-style description. Non-UniProt
+    descriptions return the whole text as the name and None for the other fields."""
+    parts = UNIPROT_FIELDS.split(" " + description)
+    name = parts[0].strip() or None
+    fields = dict(zip(parts[1::2], (v.strip() for v in parts[2::2]), strict=True))
+    return {"protein_name": name, "organism": fields.get("OS"), "gene": fields.get("GN")}
+
 def _feature_functions(ph: float) -> dict[str, Callable[[str], float]]:
     """Feature columns in output order. Net charge column is named after its pH."""
     return {
@@ -63,6 +74,7 @@ def _feature_row(record: FastaRecord, ph: float) -> dict[str, object]:
         "identifier": record.identifier,
         "accession": parse_accession(record.identifier),
         "description": record.description,
+        **parse_uniprot_description(record.description),
         "length": len(record.sequence.removesuffix("*")),
         "is_valid": result.is_valid,
         "ambiguous_count": result.ambiguous_count,
@@ -101,3 +113,59 @@ def summarize_features(table: pd.DataFrame) -> pd.DataFrame:
     summary = numeric.astype(float).describe().T
     summary.index.name = "feature"
     return summary
+
+def filter_features(
+    table: pd.DataFrame,
+    query: str = "",
+    valid_only: bool = False,
+    length_range: tuple[int, int] | None = None,
+) -> pd.DataFrame:
+    """Rows matching a case-insensitive search (identifier or description), validity,
+    and an inclusive length range. Returns a new table; the input is not modified."""
+    mask = pd.Series(True, index=table.index)
+    if query.strip():
+        needle = query.strip().lower()
+        haystack = table.index.str.lower() + " " + table["description"].fillna("").str.lower()
+        mask &= haystack.str.contains(needle, regex=False)
+    if valid_only:
+        mask &= table["is_valid"].astype(bool)
+    if length_range is not None:
+        low, high = length_range
+        mask &= table["length"].between(low, high).fillna(False).astype(bool)
+    return table.loc[mask]
+
+
+def build_count_table(records: list[FastaRecord]) -> pd.DataFrame:
+    """Residue counts: one row per record, 20 residue columns. Invalid rows are NA."""
+    rows = {
+        record.identifier: (
+            features.residue_counts(record.sequence)
+            if validate_sequence(record.sequence).is_valid
+            else dict.fromkeys(features.AMINO_ACIDS, pd.NA)
+        )
+        for record in records
+    }
+    table = pd.DataFrame.from_dict(rows, orient="index", columns=list(features.AMINO_ACIDS))
+    table.index.name = "identifier"
+    table.columns.name = "residue"
+    return table.astype("Int64")
+
+def dataset_composition(counts: pd.DataFrame, lengths: pd.Series) -> pd.DataFrame:
+    """Dataset-level amino acid frequencies, two ways:
+
+    - residue_weighted: pooled counts / pooled length. Every residue counts equally, so
+      long proteins dominate (what you get by concatenating all sequences).
+    - protein_weighted: mean of each protein's own frequencies. Every protein counts
+      equally, regardless of length.
+
+    Rows with missing counts (invalid sequences) are excluded from both.
+    """
+    valid = counts.dropna(how="any").astype(float)
+    valid_lengths = lengths.loc[valid.index].astype(float)
+    if valid.empty:
+        return pd.DataFrame(columns=["residue_weighted", "protein_weighted"], dtype=float)
+    pooled = valid.sum() / valid_lengths.sum()
+    per_protein = valid.div(valid_lengths, axis=0).mean()
+    result = pd.DataFrame({"residue_weighted": pooled, "protein_weighted": per_protein})
+    result.index.name = "residue"
+    return result

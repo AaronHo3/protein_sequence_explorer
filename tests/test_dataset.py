@@ -8,6 +8,7 @@ import pytest
 from protein_explorer.dataset import (
     build_composition_table,
     build_feature_table,
+    filter_features,
     parse_accession,
     summarize_features,
 )
@@ -169,3 +170,81 @@ def test_summary_values_match_table(sample_table):
 def test_summary_excludes_invalid_records():
     table = build_feature_table([GOOD, GAPPED])
     assert summarize_features(table).loc["length", "count"] == 1
+
+
+# --- Filtering ---------------------------------------------------------------
+
+
+def test_filter_search_matches_identifier_and_description(sample_table):
+    assert list(filter_features(sample_table, "p53").index) == ["sp|P04637|P53_HUMAN"]
+    assert list(filter_features(sample_table, "LYSOZYME").index) == ["sp|P00698|LYSC_CHICK"]
+    assert len(filter_features(sample_table, "homo sapiens")) == 5
+
+
+def test_filter_search_is_literal_not_regex(sample_table):
+    # As a regex, "sp|P0" would match all 8 rows; as literal text it matches the 5 P0 accessions
+    assert filter_features(sample_table, "sp|P0").shape[0] == 5
+
+
+def test_filter_valid_only_and_length_range():
+    table = build_feature_table([GOOD, GAPPED, AMBIGUOUS])
+    assert list(filter_features(table, valid_only=True).index) == [GOOD.identifier, "ambiguous"]
+    assert list(filter_features(table, length_range=(7, 10)).index) == ["gapped", "ambiguous"]
+
+
+def test_filter_returns_new_table_and_keeps_input(sample_table):
+    before = sample_table.copy()
+    filtered = filter_features(sample_table, "insulin")
+    assert filtered is not sample_table
+    pd.testing.assert_frame_equal(sample_table, before)
+
+
+def test_empty_query_returns_everything(sample_table):
+    assert len(filter_features(sample_table, "   ")) == 8
+
+
+# --- UniProt metadata, counts, dataset composition ---------------------------
+
+
+def test_parse_uniprot_description():
+    from protein_explorer.dataset import parse_uniprot_description
+    parsed = parse_uniprot_description("Cellular tumor antigen p53 OS=Homo sapiens OX=9606 GN=TP53 PE=1 SV=4")
+    assert parsed == {"protein_name": "Cellular tumor antigen p53", "organism": "Homo sapiens", "gene": "TP53"}
+    assert parse_uniprot_description("my protein") == {"protein_name": "my protein", "organism": None, "gene": None}
+    assert parse_uniprot_description("")["protein_name"] is None
+
+
+def test_feature_table_has_metadata_columns(sample_table):
+    assert sample_table.loc["sp|P42212|GFP_AEQVI", "organism"] == "Aequorea victoria"
+    assert sample_table.loc["sp|P01308|INS_HUMAN", "gene"] == "INS"
+
+
+def test_count_table_integers_and_invalid_rows(sample_records):
+    from protein_explorer.dataset import build_count_table
+    counts = build_count_table(sample_records)
+    assert counts.loc["sp|P01308|INS_HUMAN", "C"] == 6
+    assert counts.loc["sp|P02769|ALBU_BOVIN"].sum() == 607
+    mixed = build_count_table([GOOD, GAPPED])
+    assert mixed.loc["gapped"].isna().all()
+
+
+def test_dataset_composition_two_weightings(sample_records, sample_table):
+    from protein_explorer.dataset import build_count_table, dataset_composition
+    counts = build_count_table(sample_records)
+    comp = dataset_composition(counts, sample_table["length"])
+    assert comp.sum().to_numpy() == pytest.approx([1.0, 1.0])
+    # Residue-weighted equals pooling every residue
+    pooled_c = counts["C"].sum() / sample_table["length"].sum()
+    assert comp.loc["C", "residue_weighted"] == pytest.approx(pooled_c)
+    # Protein-weighted equals the mean of per-protein frequencies
+    per_protein = (counts["C"] / sample_table["length"]).mean()
+    assert comp.loc["C", "protein_weighted"] == pytest.approx(per_protein)
+
+
+def test_dataset_composition_excludes_invalid_and_handles_empty():
+    from protein_explorer.dataset import build_count_table, dataset_composition
+    table = build_feature_table([GOOD, GAPPED])
+    comp = dataset_composition(build_count_table([GOOD, GAPPED]), table["length"])
+    assert comp["residue_weighted"].sum() == pytest.approx(1.0)
+    empty = dataset_composition(build_count_table([GAPPED]), build_feature_table([GAPPED])["length"])
+    assert empty.empty
