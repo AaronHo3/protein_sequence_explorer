@@ -6,6 +6,9 @@ This is the first in a series of protein bioinformatics projects. The goal is a 
 
 ![Protein page: sequence viewer with residues 1–18 (the lysozyme signal peptide) selected and summarised in the residue inspector](docs/screenshots/protein_sequence_viewer.png)
 
+## Video Demo
+
+
 ## Status
 
 | Milestone | Status |
@@ -68,7 +71,7 @@ The app follows the workflow **Import → Overview → Protein → Compare → E
 ### Sequence viewer
 
 - Residues in blocks of 10 with 1-based position numbers, wrapped to fit the width or at 30–100 per line
-- Seven colouring modes: chemical class, amino acid identity, hydrophobic/hydrophilic, charge, polar/nonpolar, aromatic, and acidic/basic/neutral. Each mode uses the same residue sets as the matching feature, so colouring by "hydrophobic" highlights exactly the residues counted by the hydrophobic fraction.
+- Seven colouring modes: chemical class, amino acid identity, hydrophobic/hydrophilic, charge, polar/nonpolar, aromatic, and acidic/basic/neutral. Each mode uses the same residue sets as the matching feature, so colouring by "hydrophobic" highlights the residues counted by the hydrophobic fraction.
 - Hover for name, one- and three-letter code, position, class, the residue's hydropathy, and the window mean at that position
 - Click to select, shift-click for a range, arrow keys to move (shift extends), Escape to clear
 - An optional hydropathy strip under each line, copy sequence or selection, and FASTA download of the protein or a selected region
@@ -146,7 +149,7 @@ All features are **estimates calculated from sequence**, not measured values. Am
 - Hydropathy cannot distinguish signal peptides from transmembrane helices, and residue classifications such as Cys, Tyr, and His are context-dependent.
 - Hovering on the hydropathy chart does not highlight the sequence live, because Streamlit sends chart events only on selection. The hydropathy strip inside the viewer provides the same linkage on hover.
 - Very long sequences (titin, 34,350 residues) render in under a second, but each selection takes about 2 s round trip. Per-residue hydropathy bars are turned off above 3,000 residues.
-- The app is designed for desktop and laptop screens. It works on narrow screens but is not optimised for them.
+
 
 ## Architecture
 
@@ -180,8 +183,3 @@ Scientific code never imports plotting or Streamlit. Visualization functions tak
 
 `uv run pytest` runs 414 tests: parsing, validation, features, Biopython agreement, tables, exports, every figure builder, the viewer payload, the residue inspector, and every app page through Streamlit's `AppTest`. The browser interactions (click, shift-click, keyboard, drag on the hydropathy plot, scatter click, uploads, downloads, light and dark mode, 1024 px layout) were checked in a real browser with Playwright. They are not part of the automated suite.
 
-## Roadmap
-
-- **Project 2, Evolution & Sequence Alignment Lab:** pairwise and multiple alignments in the viewer (via `positions`), conservation scores as tracks, sequence logos.
-- **Project 3, Protein Structure Workbench:** link viewer selections to residues in a 3D structure; mutation annotations.
-- **ML:** use the feature matrix (`features.csv` joined with `composition.csv`) as a baseline against ESM embeddings, and extract mature chains from UniProt annotations so features describe the functional protein.
