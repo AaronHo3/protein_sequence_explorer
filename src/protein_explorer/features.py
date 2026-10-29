@@ -162,3 +162,26 @@ def isoelectric_point(sequence: str) -> float:
         else:
             high = mid
     return (low + high) / 2
+
+def hydropathy_profile(sequence: str, window: int = 9) -> list[tuple[int, float]]:
+    """Sliding-window Kyte-Doolittle hydropathy.
+
+    Returns (1-based centre position, mean hydropathy) for each full window. Residues
+    without a hydropathy value (B/Z/J/X/U/O) are skipped within a window; a window
+    with no standard residues gives NaN. Window must be odd and no longer than the
+    sequence. Kyte & Doolittle suggest 9 for surface regions, 19 for transmembrane
+    helices (mean > 1.6).
+    """
+    residues = _residues(sequence)
+    if window < 1 or window % 2 == 0:
+        raise ValueError(f"Window must be a positive odd number, got {window}.")
+    if window > len(residues):
+        raise ValueError(f"Window {window} is longer than the sequence ({len(residues)}).")
+
+    half = window // 2
+    profile: list[tuple[int, float]] = []
+    for start in range(len(residues) - window + 1):
+        values = [KYTE_DOOLITTLE[r] for r in residues[start:start + window] if r in KYTE_DOOLITTLE]
+        mean = sum(values) / len(values) if values else float("nan")
+        profile.append((start + half + 1, mean))
+    return profile

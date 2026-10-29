@@ -11,8 +11,8 @@ This is the first in a series of protein bioinformatics projects. The goal is a 
 | 1. FASTA parsing and validation | Done |
 | 2. Sequence features | Done |
 | 3. DataFrames, CSV export, `analyze` CLI | Done |
-| 4. Visualization | Next |
-| 5. Biopython validation report | Planned |
+| 4. Visualization | Done |
+| 5. Biopython validation report | Next |
 | 6. Streamlit app | Planned |
 | 7. Documentation and demo | Planned |
 
@@ -33,6 +33,9 @@ uv run python -m protein_explorer analyze data/sample.fasta --output results/
 # Same, with net charge calculated at pH 7.4
 uv run python -m protein_explorer analyze data/sample.fasta --output results/ --ph 7.4
 
+# Generate all figures in results/figures/ (PNG by default; also svg or pdf)
+uv run python -m protein_explorer plot data/sample.fasta --output results/figures/ --window 9 --format png
+
 # Run the tests
 uv run pytest
 ```
@@ -50,6 +53,7 @@ These are full **precursor** sequences, including signal peptides and propeptide
 3. **Features** (`features.py`), described below.
 4. **Tables** (`dataset.py`). Builds pandas tables with one row per protein, indexed by FASTA identifier, and extracts the UniProt accession. Invalid sequences stay in the table with `NaN` features. A feature that can't be computed (e.g. molecular weight for a sequence containing `X`) is `NaN`, with the reason in `feature_errors`.
 5. **Export** (`export.py`). Writes the tables as CSV files, plus a record of how they were produced.
+6. **Figures** (`plots.py`). Static matplotlib figures at 300 dpi. Residues are coloured and grouped by chemical class (nonpolar, aromatic, polar, acidic, basic) using a colour-blind-safe palette.
 
 ## Outputs
 
@@ -63,6 +67,17 @@ These are full **precursor** sequences, including signal peptides and propeptide
 | `run_info.json` | Input file and its SHA-256 checksum, record counts, pH, pKa set, mass type, and software versions |
 
 `features.csv` and `composition.csv` share the identifier column, so joining them gives a feature matrix with one row per protein and about 35 columns, ready for ML.
+
+`plot` writes these figures:
+
+| Figure | What it shows |
+|---|---|
+| `length_distribution` | Histogram of sequence lengths |
+| `gravy_comparison` | GRAVY per protein, sorted; red is hydrophobic, blue is hydrophilic |
+| `mw_vs_length` | Molecular weight against length, with a 110 Da per residue reference line |
+| `composition_heatmap` | Residue frequencies, proteins × amino acids |
+| `composition/<entry>` | One protein's composition, with the dataset mean marked for each residue |
+| `hydropathy/<entry>` | Sliding-window Kyte–Doolittle profile along the sequence |
 
 ## Features
 
@@ -81,14 +96,16 @@ All features are **estimates calculated from sequence**, not measured values. Am
 | Molecular weight | Sum of average residue masses + one water (Da). Assumes no PTMs and reduced Cys |
 | Net charge at pH | Henderson–Hasselbalch over side chains and both termini, using EMBOSS pKa values |
 | Isoelectric point | pH where net charge = 0, found by bisection on pH 0–14 |
+| Hydropathy profile | Mean Kyte–Doolittle value in a sliding window (odd width, default 9) plotted at each window's centre residue |
 
 ## Findings 
 
-- **Molecular weight:** we calculate 69.3 kDa for BSA, against the usual 66.4 kDa. The gap is the 24-residue signal peptide and propeptide in the precursor sequence.
-- **Disulfides:** BSA's 17 disulfide bonds make the true mass about 34 Da lower than we calculate, because we assume every Cys is reduced. This is small compared with the precursor effect.
-- **Isoelectric point:** our pI values differ from Biopython's by up to 0.58 units (HBB: 7.32 vs 6.74). This comes from using EMBOSS rather than Bjellqvist pKa values.
+- **Molecular weight:**  69.3 kDa was calculated for BSA, against the usual 66.4 kDa. The gap is the 24-residue signal peptide and propeptide in the precursor sequence.
+- **Disulfides:** BSA's 17 disulfide bonds make the true mass about 34 Da lower than we calculate, because it is assumed that every Cys is reduced. This is small compared with the precursor effect.
+- **Isoelectric point:** The pI values differ from Biopython's by up to 0.58 units (HBB: 7.32 vs 6.74). This comes from using EMBOSS rather than Bjellqvist pKa values.
 - **GRAVY and solubility:** insulin has a positive GRAVY (+0.19 for the precursor, +0.22 for the mature A+B chains), yet it is a soluble hormone. GRAVY is a weak predictor of solubility.
 - **Sequence length:** insulin is listed as 110 residues because UniProt stores preproinsulin. The active hormone is 51 residues.
+- **Transmembrane threshold:** none of the 8 sample proteins sits in a membrane, yet lysozyme and β2-microglobulin exceed the Kyte–Doolittle transmembrane cutoff (1.6 at window 19). In both, the peak falls in the signal peptide, so hydropathy alone can't tell a signal peptide from a transmembrane helix.
 
 ## Project layout
 
@@ -99,7 +116,8 @@ src/protein_explorer/
   features.py      feature calculations
   dataset.py       pandas feature, composition, and summary tables
   export.py        CSV and run_info.json export
-  __main__.py      command-line interface (summarize, analyze)
+  plots.py         matplotlib figures
+  __main__.py      command-line interface (summarize, analyze, plot)
 tests/             pytest suite and malformed-file fixtures
 data/              sample FASTA and provenance
 ```

@@ -69,3 +69,16 @@ def test_analyze_malformed_file_returns_error_and_writes_nothing(tmp_path, capsy
     assert main(["analyze", str(FIXTURES / "empty_record.fasta"), "--output", str(output)]) == 1
     assert "not valid FASTA" in capsys.readouterr().err
     assert not output.exists()
+
+
+def test_plot_writes_figures(tmp_path, capsys):
+    output = tmp_path / "figures"
+    assert main(["plot", str(SAMPLE_FASTA), "--output", str(output), "--format", "svg"]) == 0
+    assert "Wrote 20 figures" in capsys.readouterr().out
+    assert (output / "mw_vs_length.svg").exists()
+    assert (output / "hydropathy" / "INS_HUMAN.svg").exists()
+
+
+def test_plot_rejects_even_window(tmp_path, capsys):
+    assert main(["plot", str(SAMPLE_FASTA), "--output", str(tmp_path), "--window", "8"]) == 1
+    assert "odd" in capsys.readouterr().err

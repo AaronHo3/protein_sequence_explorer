@@ -13,6 +13,7 @@ from protein_explorer.features import (
     basic_count,
     charged_fraction,
     gravy,
+    hydropathy_profile,
     hydrophobic_fraction,
     isoelectric_point,
     molecular_weight,
@@ -339,3 +340,48 @@ def test_sample_pi_ordering_reflects_biology(sample):
     assert lysozyme > 9.0  # cationic antibacterial enzyme
     assert net_charge(sample["sp|P00698|LYSC_CHICK"], 7.0) > 0
     assert net_charge(sample["sp|P0DP23|CALM1_HUMAN"], 7.0) < -20
+
+
+# --- Hydropathy profile ------------------------------------------------------
+
+
+def test_hydropathy_profile_window_three_by_hand():
+    # Windows: IIR -> (4.5+4.5-4.5)/3 = 1.5 centred at 2; IRR -> -1.5 centred at 3
+    profile = hydropathy_profile("IIRR", window=3)
+    assert [pos for pos, _ in profile] == [2, 3]
+    assert [value for _, value in profile] == pytest.approx([1.5, -1.5])
+
+
+def test_hydropathy_profile_length_is_sequence_minus_window_plus_one():
+    assert len(hydropathy_profile("A" * 50, window=9)) == 42
+
+
+def test_hydropathy_profile_window_one_is_raw_scale():
+    assert [v for _, v in hydropathy_profile("IR", window=1)] == [4.5, -4.5]
+
+
+def test_hydropathy_profile_skips_ambiguous_within_window():
+    assert hydropathy_profile("IXI", window=3) == [(2, pytest.approx(4.5))]
+
+
+def test_hydropathy_profile_all_ambiguous_window_is_nan():
+    value = hydropathy_profile("XXX", window=3)[0][1]
+    assert value != value  # NaN
+
+
+@pytest.mark.parametrize("window", [0, -3, 4])
+def test_hydropathy_profile_rejects_invalid_window(window):
+    with pytest.raises(ValueError, match="odd"):
+        hydropathy_profile("MKTAYIAKQR", window=window)
+
+
+def test_hydropathy_profile_rejects_window_longer_than_sequence():
+    with pytest.raises(ValueError, match="longer"):
+        hydropathy_profile("MKT", window=9)
+
+
+def test_insulin_signal_peptide_is_hydrophobic_peak(sample):
+    # Residues 1-24 are the signal peptide; its hydrophobic core should exceed 1.6
+    profile = dict(hydropathy_profile(sample["sp|P01308|INS_HUMAN"], window=9))
+    assert max(profile[pos] for pos in range(5, 21)) > 1.6
+    assert min(profile.values()) < -2  # hydrophilic, charged region near the C-peptide
