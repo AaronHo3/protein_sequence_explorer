@@ -2,6 +2,9 @@
 # passed validation (see validation.py) and do not re-validate it.
 
 from collections import Counter
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
 
 from protein_explorer.validation import STANDARD_RESIDUES, STOP
 
@@ -45,6 +48,15 @@ NEGATIVE_PKA: dict[str, float] = {
     "Cterm": 3.6, "D": 3.9, "E": 4.1, "C": 8.5, "Y": 10.1, "U": 5.2,
 }
 PKA_SET = "EMBOSS (U: 5.2, literature estimate)"  # recorded in run metadata
+
+@dataclass(frozen=True)
+class PkaSet:
+    """A named, read-only set of pKa values. Keys are residues plus 'Nterm' and 'Cterm'."""
+    name: str
+    positive: Mapping[str, float]
+    negative: Mapping[str, float]
+
+EMBOSS_PKA = PkaSet(PKA_SET, MappingProxyType(POSITIVE_PKA), MappingProxyType(NEGATIVE_PKA))
 PI_TOLERANCE = 1e-4
 
 def _residues(sequence: str) -> str:
@@ -133,7 +145,7 @@ def _ionisable_group_counts(sequence: str) -> Counter[str]:
     counts["Cterm"] = 1
     return counts
 
-def net_charge(sequence: str, ph: float = 7.0) -> float:
+def net_charge(sequence: str, ph: float = 7.0, pka_set: PkaSet = EMBOSS_PKA) -> float:
     """Estimated net charge at a given pH using the Henderson-Hasselbalch equation.
 
     Treats every ionisable group as independent and fully solvent-exposed, so it
@@ -141,14 +153,14 @@ def net_charge(sequence: str, ph: float = 7.0) -> float:
     """
     counts = _ionisable_group_counts(sequence)
     positive = sum(
-        counts[group] / (1 + 10 ** (ph - pka)) for group, pka in POSITIVE_PKA.items()
+        counts[group] / (1 + 10 ** (ph - pka)) for group, pka in pka_set.positive.items()
     )
     negative = sum(
-        counts[group] / (1 + 10 ** (pka - ph)) for group, pka in NEGATIVE_PKA.items()
+        counts[group] / (1 + 10 ** (pka - ph)) for group, pka in pka_set.negative.items()
     )
     return positive - negative
 
-def isoelectric_point(sequence: str) -> float:
+def isoelectric_point(sequence: str, pka_set: PkaSet = EMBOSS_PKA) -> float:
     """Estimated pI: the pH where net_charge is zero, found by bisection on [0, 14].
 
     Net charge decreases monotonically with pH, so bisection always converges.
@@ -157,7 +169,7 @@ def isoelectric_point(sequence: str) -> float:
     low, high = 0.0, 14.0
     while high - low > PI_TOLERANCE:
         mid = (low + high) / 2
-        if net_charge(sequence, mid) > 0:
+        if net_charge(sequence, mid, pka_set) > 0:
             low = mid
         else:
             high = mid

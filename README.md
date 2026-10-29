@@ -12,8 +12,8 @@ This is the first in a series of protein bioinformatics projects. The goal is a 
 | 2. Sequence features | Done |
 | 3. DataFrames, CSV export, `analyze` CLI | Done |
 | 4. Visualization | Done |
-| 5. Biopython validation report | Next |
-| 6. Streamlit app | Planned |
+| 5. Biopython validation report | Done |
+| 6. Streamlit app | Next |
 | 7. Documentation and demo | Planned |
 
 ## Running it
@@ -35,6 +35,9 @@ uv run python -m protein_explorer analyze data/sample.fasta --output results/ --
 
 # Generate all figures in results/figures/ (PNG by default; also svg or pdf)
 uv run python -m protein_explorer plot data/sample.fasta --output results/figures/ --window 9 --format png
+
+# Compare against Biopython and write docs/validation_report.md (needs the dev extra)
+uv run python -m protein_explorer.crosscheck data/sample.fasta --output docs/validation_report.md
 
 # Run the tests
 uv run pytest
@@ -98,13 +101,23 @@ All features are **estimates calculated from sequence**, not measured values. Am
 | Isoelectric point | pH where net charge = 0, found by bisection on pH 0–14 |
 | Hydropathy profile | Mean Kyte–Doolittle value in a sliding window (odd width, default 9) plotted at each window's centre residue |
 
+## Validation against Biopython
+
+[docs/validation_report.md](docs/validation_report.md) compares every overlapping feature with Biopython 1.88. Biopython is a dev dependency only, used for checking.
+
+- **Molecular weight, aromaticity, GRAVY:** match to rounding error (≤ 0.00002 Da, exact for the others).
+- **pI and net charge:** differ only because of pKa conventions. Given Biopython's pKa set and its terminal-residue adjustments, our code reproduces Biopython's pI with a remaining difference of 0.0000.
+- **Tests:** `tests/test_vs_biopython.py` checks each feature for all 8 proteins, with tolerances justified in the file's docstring.
+
 ## Findings 
 
 - **Molecular weight:**  69.3 kDa was calculated for BSA, against the usual 66.4 kDa. The gap is the 24-residue signal peptide and propeptide in the precursor sequence.
 - **Disulfides:** BSA's 17 disulfide bonds make the true mass about 34 Da lower than we calculate, because it is assumed that every Cys is reduced. This is small compared with the precursor effect.
-- **Isoelectric point:** The pI values differ from Biopython's by up to 0.58 units (HBB: 7.32 vs 6.74). This comes from using EMBOSS rather than Bjellqvist pKa values.
+- **Isoelectric point:** The pI values differ from Biopython's by up to 0.58 units (HBB: 7.32 vs 6.74). Up to 0.51 units comes from using EMBOSS rather than Biopython's pKa values, and up to 0.07 from Biopython adjusting terminal pKa by residue. Both rank the 8 proteins in the same order.
 - **GRAVY and solubility:** insulin has a positive GRAVY (+0.19 for the precursor, +0.22 for the mature A+B chains), yet it is a soluble hormone. GRAVY is a weak predictor of solubility.
 - **Sequence length:** insulin is listed as 110 residues because UniProt stores preproinsulin. The active hormone is 51 residues.
+- **Biopython pI clamping:** Biopython only searches pH 4.05–12, so for poly-Asp (D×20) it returns 4.05, where the net charge is −9.2. Our 0–14 search finds 2.76 with the same pKa values.
+- **Residue handling vs Biopython:** Biopython's GRAVY raises an error on X, B, or U, and it counts a terminal `*` as a residue. We skip unknown residues in averages and strip `*`.
 - **Transmembrane threshold:** none of the 8 sample proteins sits in a membrane, yet lysozyme and β2-microglobulin exceed the Kyte–Doolittle transmembrane cutoff (1.6 at window 19). In both, the peak falls in the signal peptide, so hydropathy alone can't tell a signal peptide from a transmembrane helix.
 
 ## Project layout
@@ -117,7 +130,9 @@ src/protein_explorer/
   dataset.py       pandas feature, composition, and summary tables
   export.py        CSV and run_info.json export
   plots.py         matplotlib figures
+  crosscheck.py    comparison with Biopython (dev only)
   __main__.py      command-line interface (summarize, analyze, plot)
 tests/             pytest suite and malformed-file fixtures
 data/              sample FASTA and provenance
+docs/              validation report
 ```

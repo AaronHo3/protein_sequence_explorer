@@ -5,7 +5,7 @@ requires-python = ">=3.11"
 dependencies = ["matplotlib>=3.8", "pandas>=2.2"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["biopython>=1.84", "pytest>=8"]
 
 [build-system]
 requires = ["hatchling"]
